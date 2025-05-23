@@ -1,0 +1,77 @@
+body {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+header {
+  background: #333;
+  color: white;
+  padding: 1rem;
+}
+
+nav a {
+  color: white;
+  margin-right: 1rem;
+  text-decoration: none;
+}
+
+.totals {
+  display: flex;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.card {
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 1rem;
+  text-align: center;
+  flex: 1;
+}
+
+.income { border-left: 5px solid green; }
+.expense { border-left: 5px solid red; }
+.profit { border-left: 5px solid blue; }
+
+.filters {
+  margin: 1rem 0;
+}
+
+.filters a {
+  margin-right: 1rem;
+  padding: 0.5rem;
+  background: #eee;
+  border-radius: 3px;
+  text-decoration: none;
+  color: #333;
+}
+
+.filters a.active {
+  background: #333;
+  color: white;
+}
+
+.transactions {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transactions th, .transactions td {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.transactions tr.income { background-color: #e8f5e9; }
+.transactions tr.expense { background-color: #ffebee; }
+
+form div {
+  margin-bottom: 1rem;
+}
+
+form label {
+  display: inline-block;
+  width: 100px;
+}
