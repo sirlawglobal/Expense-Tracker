@@ -1,157 +1,51 @@
-<div class="row mb-4">
-  <div class="col-md-4">
-    <div class="card bg-success text-white">
-      <div class="card-body">
-        <h5 class="card-title">Income</h5>
-        <p class="card-text h4">$<%= income.toFixed(2) %></p>
-      </div>
-    </div>
+
+<div class="container">
+  <h1>Expense Tracker</h1>
+
+  <div class="totals">
+    <div class="card income">Income: ₦<%= income %></div>
+    <div class="card expense">Expenses: ₦<%= expenses %></div>
+    <div class="card profit">Profit: ₦<%= profit %></div>
   </div>
-  <div class="col-md-4">
-    <div class="card bg-danger text-white">
-      <div class="card-body">
-        <h5 class="card-title">Expenses</h5>
-        <p class="card-text h4">$<%= expenses.toFixed(2) %></p>
-      </div>
-    </div>
+
+  <div class="forms">
+    <form action="/add" method="POST" class="form-card">
+      <h3>Add Transaction</h3>
+      <select name="type" required>
+        <option value="" disabled selected>Select Type</option>
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+      <input type="number" name="amount" placeholder="Amount" required />
+      <input type="text" name="category" placeholder="Category" />
+      <input type="text" name="description" placeholder="Description" />
+      <button type="submit">Add</button>
+    </form>
+
+    <form action="/upload" method="POST" enctype="multipart/form-data" class="form-card">
+      <h3>Upload Receipt</h3>
+      <input type="file" name="receipt" accept="image/*" required />
+      <button type="submit">Upload</button>
+    </form>
+
+    <form id="voiceForm" action="/voice" method="POST" class="form-card">
+      <h3>Voice Input</h3>
+      <button type="button" id="recordBtn" class="record-btn">🎙️ Start Recording</button>
+      <audio id="audioPreview" controls style="display:none; margin-top: 10px; width: 100%; border-radius: 5px;"></audio>
+      <input type="hidden" name="audio" id="audioInput" />
+      <button type="submit" disabled id="submitVoice" class="submit-voice-btn">Submit</button>
+    </form>
   </div>
-  <div class="col-md-4">
-    <div class="card bg-primary text-white">
-      <div class="card-body">
-        <h5 class="card-title">Profit</h5>
-        <p class="card-text h4">$<%= profit.toFixed(2) %></p>
-      </div>
-    </div>
-  </div>
+
+  <h3 class="transactions-title">Transactions</h3>
+  <ul class="transactions">
+    <% transactions.forEach(transaction => { %>
+      <li class="<%= transaction.type %>">
+        <%= transaction.date.toDateString() %> – 
+        ₦<%= transaction.amount %> – 
+        <%= transaction.category %> – 
+        <%= transaction.description %>
+      </li>
+    <% }) %>
+  </ul>
 </div>
-
-<div class="card mb-4">
-  <div class="card-header">
-    <div class="d-flex justify-content-between align-items-center">
-      <h5 class="mb-0">Recent Transactions</h5>
-      <div>
-        <select id="filter" class="form-select">
-          <option value="all">All</option>
-          <option value="income">Income</option>
-          <option value="expense">Expenses</option>
-        </select>
-      </div>
-    </div>
-  </div>
-  <div class="card-body">
-    <canvas id="transactionChart" height="100"></canvas>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <h5>Transaction List</h5>
-  </div>
-  <div class="card-body">
-    <a href="/transactions/add" class="btn btn-primary mb-3">Add Transaction</a>
-    <div id="transactionList">
-      <% transactions.forEach(transaction => { %>
-        <div class="card mb-2">
-          <div class="card-body">
-            <div class="d-flex justify-content-between">
-              <div>
-                <h6 class="mb-1">
-                  $<%= transaction.amount.toFixed(2) %>
-                  <span class="badge bg-<%= transaction.type === 'income' ? 'success' : 'danger' %>">
-                    <%= transaction.type %>
-                  </span>
-                </h6>
-                <small class="text-muted"><%= transaction.category %></small>
-              </div>
-              <div>
-                <small class="text-muted"><%= transaction.date.toLocaleDateString() %></small>
-                <% if (transaction.isAutoCategorized) { %>
-                  <span class="badge bg-info">Auto</span>
-                <% } %>
-              </div>
-            </div>
-            <% if (transaction.description) { %>
-              <p class="mt-2 mb-0"><%= transaction.description %></p>
-            <% } %>
-          </div>
-        </div>
-      <% }); %>
-    </div>
-  </div>
-</div>
-
-<script>
-  // Initialize chart
-  const ctx = document.getElementById('transactionChart').getContext('2d');
-
-  // const ctx = document.getElementById('transactionChart');
-const income = parseFloat(ctx.dataset.income) || 0;
-const expenses = parseFloat(ctx.dataset.expenses) || 0;
-const profit = parseFloat(ctx.dataset.profit) || 0;
-
-  const transactionChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Income', 'Expenses', 'Profit'],
-      datasets: [{
-        label: 'Amount',
-         data: [income, expenses, profit],
-        backgroundColor: [
-          'rgba(40, 167, 69, 0.7)',
-          'rgba(220, 53, 69, 0.7)',
-          'rgba(13, 110, 253, 0.7)'
-        ],
-        borderColor: [
-          'rgba(40, 167, 69, 1)',
-          'rgba(220, 53, 69, 1)',
-          'rgba(13, 110, 253, 1)'
-        ],
-        borderWidth: 1
-      }]
-    },
-    options: {
-      scales: {
-        y: {
-          beginAtZero: true
-        }
-      }
-    }
-  });
-
-  // Filter transactions
-  document.getElementById('filter').addEventListener('change', async (e) => {
-    const filter = e.target.value;
-    const response = await fetch(`/transactions/filter?filter=${filter}`);
-    const transactions = await response.json();
-    
-    let html = '';
-    transactions.forEach(transaction => {
-      const date = new Date(transaction.date).toLocaleDateString();
-      
-      html += `
-        <div class="card mb-2">
-          <div class="card-body">
-            <div class="d-flex justify-content-between">
-              <div>
-                <h6 class="mb-1">
-                  $${transaction.amount.toFixed(2)}
-                  <span class="badge bg-${transaction.type === 'income' ? 'success' : 'danger'}">
-                    ${transaction.type}
-                  </span>
-                </h6>
-                <small class="text-muted">${transaction.category}</small>
-              </div>
-              <div>
-                <small class="text-muted">${date}</small>
-                ${transaction.isAutoCategorized ? '<span class="badge bg-info">Auto</span>' : ''}
-              </div>
-            </div>
-            ${transaction.description ? `<p class="mt-2 mb-0">${transaction.description}</p>` : ''}
-          </div>
-        </div>
-      `;
-    });
-    
-    document.getElementById('transactionList').innerHTML = html;
-  });
-</script>

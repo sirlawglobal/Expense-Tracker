@@ -1,41 +1,22 @@
+// models/Transaction.js
 const mongoose = require('mongoose');
 
-const TransactionSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  amount: {
-    type: Number,
-    required: true
-  },
+const transactionSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ['income', 'expense'],
-    required: true
+    required: true,
   },
-  category: {
-    type: String,
-    required: true
+  amount: {
+    type: Number,
+    required: true,
   },
-  description: {
-    type: String
-  },
-  receiptImage: {
-    type: String
-  },
+  category: String,
+  description: String,
   date: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
-  voiceNote: {
-    type: String
-  },
-  isAutoCategorized: {
-    type: Boolean,
-    default: false
-  }
 });
 
-module.exports = mongoose.model('Transaction', TransactionSchema);
+module.exports = mongoose.model('Transaction', transactionSchema);
