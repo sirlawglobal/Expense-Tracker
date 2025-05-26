@@ -44,13 +44,53 @@ exports.addTransaction = async (req, res) => {
 };
 
 
+// exports.uploadReceipt = async (req, res) => {
+//   if (!req.file) {
+//     return res.status(400).send("No file uploaded.");
+//   }
+
+//   try {
+//     const imagePath = req.file.path;
+//     const result = await tesseract.recognize(imagePath, 'eng', {
+//       logger: (m) => console.log(m),
+//     });
+
+//     const text = result.data.text;
+//     console.log("Extracted text:", text);
+
+//     const amountMatch = text.match(/[\d,]+\.\d{2}/);
+//     const amount = amountMatch ? parseFloat(amountMatch[0].replace(/,/g, '')) : 0;
+
+//     const transaction = new Transaction({
+//       type: 'expense',
+//       amount,
+//       category: 'Receipt',
+//       description: text,
+//     });
+
+//     await transaction.save();
+
+//     if (fs.existsSync(imagePath)) {
+//       fs.unlinkSync(imagePath);
+//     }
+
+//     res.redirect('/');
+//   } catch (err) {
+//     console.error("Error in uploadReceipt:", err);
+//     res.status(500).send('Server Error');
+//   }
+// };
+
+
 exports.uploadReceipt = async (req, res) => {
   if (!req.file) {
     return res.status(400).send("No file uploaded.");
   }
-
+ console.log("Image uploaded to:", req.file.path);
   try {
     const imagePath = req.file.path;
+    console.log("Image uploaded to:", imagePath);
+
     const result = await tesseract.recognize(imagePath, 'eng', {
       logger: (m) => console.log(m),
     });
@@ -61,6 +101,8 @@ exports.uploadReceipt = async (req, res) => {
     const amountMatch = text.match(/[\d,]+\.\d{2}/);
     const amount = amountMatch ? parseFloat(amountMatch[0].replace(/,/g, '')) : 0;
 
+    console.log("Parsed amount:", amount);
+
     const transaction = new Transaction({
       type: 'expense',
       amount,
@@ -69,15 +111,20 @@ exports.uploadReceipt = async (req, res) => {
     });
 
     await transaction.save();
+    console.log("Transaction saved.");
 
+    // Delete file safely
     if (fs.existsSync(imagePath)) {
-      fs.unlinkSync(imagePath);
+      fs.unlink(imagePath, (err) => {
+        if (err) console.error("File deletion error:", err);
+        else console.log("File deleted.");
+      });
     }
 
     res.redirect('/');
   } catch (err) {
     console.error("Error in uploadReceipt:", err);
-    res.status(500).send('Server Error');
+    res.status(500).send(err.message); // TEMP: Show error for debugging
   }
 };
 
