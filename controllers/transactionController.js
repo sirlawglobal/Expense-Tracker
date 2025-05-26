@@ -43,91 +43,99 @@ exports.addTransaction = async (req, res) => {
   }
 };
 
+const sharp = require('sharp');
 
-// exports.uploadReceipt = async (req, res) => {
-//   if (!req.file) {
-//     return res.status(400).send("No file uploaded.");
-//   }
 
-//   try {
-//     const imagePath = req.file.path;
-//     const result = await tesseract.recognize(imagePath, 'eng', {
-//       logger: (m) => console.log(m),
-//     });
+// Image Preprocessing Function with Sharp
+async function preprocessImage(inputPath) {
+  try {
+    // Read, process, and overwrite in one operation
+    const processedBuffer = await sharp(inputPath)
+      .greyscale()
+      .normalise()
+      .linear(1.1, 5)
+      .toBuffer();
 
-//     const text = result.data.text;
-//     console.log("Extracted text:", text);
+    // Write processed buffer back to original file
+    await fs.promises.writeFile(inputPath, processedBuffer);
 
-//     const amountMatch = text.match(/[\d,]+\.\d{2}/);
-//     const amount = amountMatch ? parseFloat(amountMatch[0].replace(/,/g, '')) : 0;
-
-//     const transaction = new Transaction({
-//       type: 'expense',
-//       amount,
-//       category: 'Receipt',
-//       description: text,
-//     });
-
-//     await transaction.save();
-
-//     if (fs.existsSync(imagePath)) {
-//       fs.unlinkSync(imagePath);
-//     }
-
-//     res.redirect('/');
-//   } catch (err) {
-//     console.error("Error in uploadReceipt:", err);
-//     res.status(500).send('Server Error');
-//   }
-// };
+    console.log('Image processed successfully');
+  } catch (err) {
+    console.error("Image processing error:", err);
+    throw err;
+  }
+}
 
 
 exports.uploadReceipt = async (req, res) => {
   if (!req.file) {
     return res.status(400).send("No file uploaded.");
   }
- console.log("Image uploaded to:", req.file.path);
+
+  const imagePath = req.file.path;
+  console.log("Image uploaded to:", imagePath);
+
   try {
-    const imagePath = req.file.path;
-    console.log("Image uploaded to:", imagePath);
+    // 1. Preprocess image
+    const processedBuffer = await sharp(imagePath)
+      .greyscale()
+      .normalise()
+      .linear(1.1, 5)
+      .toBuffer();
+    await fs.promises.writeFile(imagePath, processedBuffer);
 
-    const result = await tesseract.recognize(imagePath, 'eng', {
-      logger: (m) => console.log(m),
-    });
+    // 2. OCR Processing with better error handling
+    let ocrText = '';
+    try {
+      const result = await tesseract.recognize(imagePath, 'eng', {
+        logger: m => console.log(m),
+        preserve_interword_spaces: 1,
+        tessedit_pageseg_mode: 6,
+      });
+      ocrText = result.data?.text || '';
+    } catch (ocrError) {
+      console.error("OCR Error:", ocrError);
+      throw new Error("Failed to process receipt text");
+    }
 
-    const text = result.data.text;
-    console.log("Extracted text:", text);
+    console.log("Extracted text:", ocrText);
 
-    const amountMatch = text.match(/[\d,]+\.\d{2}/);
-    const amount = amountMatch ? parseFloat(amountMatch[0].replace(/,/g, '')) : 0;
+    // 3. Parse amount with more robust matching
+    let amount = 0;
+    const amountPatterns = [
+      /(?:Total|Amount|TOTAL|AMOUNT)[\s:]*[\$€£]?[\s]*([\d,]+\.\d{2})/i,
+      /([\d,]+\.\d{2})(?=\s*[\$€£])/i,
+      /(\d+\.\d{2})/
+    ];
+
+    for (const pattern of amountPatterns) {
+      const match = ocrText.match(pattern);
+      if (match) {
+        amount = parseFloat(match[1]?.replace(/,/g, '') || '0');
+        break;
+      }
+    }
 
     console.log("Parsed amount:", amount);
 
+    // 4. Save transaction
     const transaction = new Transaction({
       type: 'expense',
       amount,
       category: 'Receipt',
-      description: text,
+      description: ocrText.substring(0, 200),
     });
-
     await transaction.save();
-    console.log("Transaction saved.");
 
-    // Delete file safely
-    if (fs.existsSync(imagePath)) {
-      fs.unlink(imagePath, (err) => {
-        if (err) console.error("File deletion error:", err);
-        else console.log("File deleted.");
-      });
-    }
-
+    // 5. Clean up
+    fs.unlinkSync(imagePath);
     res.redirect('/');
   } catch (err) {
     console.error("Error in uploadReceipt:", err);
-    res.status(500).send(err.message); // TEMP: Show error for debugging
+    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+    res.status(500).send(err.message || "Receipt processing failed");
   }
 };
-
 
 exports.voiceInput = async (req, res) => {
   try {
