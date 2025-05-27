@@ -28,13 +28,13 @@
       <button type="submit">Upload</button>
     </form>
 
-    <form id="voiceForm" action="/voice" method="POST" class="form-card">
-      <h3>Voice Input</h3>
-      <button type="button" id="recordBtn" class="record-btn">🎙️ Start Recording</button>
-      <audio id="audioPreview" controls style="display:none; margin-top: 10px; width: 100%; border-radius: 5px;"></audio>
-      <input type="hidden" name="audio" id="audioInput" />
-      <button type="submit" disabled id="submitVoice" class="submit-voice-btn">Submit</button>
-    </form>
+   <form id="voiceForm" action="/voice" method="POST" enctype="multipart/form-data" class="form-card">
+  <h3>Voice Input</h3>
+  <button type="button" id="recordBtn" class="record-btn">🎙️ Start Recording</button>
+  <audio id="audioPreview" controls style="display:none; margin-top: 10px; width: 100%; border-radius: 5px;"></audio>
+  <input type="file" name="audio" id="audioInput" accept="audio/*" style="display:none;" />
+  <button type="submit" disabled id="submitVoice" class="submit-voice-btn">Submit</button>
+</form>
   </div>
 
   <h3 class="transactions-title">Transactions</h3>

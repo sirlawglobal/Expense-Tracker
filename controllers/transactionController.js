@@ -1,10 +1,9 @@
 const Transaction = require('../models/Transaction');
 const tesseract = require('tesseract.js');
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
 const { createWorker } = require('tesseract.js');
-
 
 exports.getDashboard = async (req, res) => {
   try {
@@ -24,13 +23,11 @@ exports.getDashboard = async (req, res) => {
       profit,
     });
   } catch (err) {
-    res.status(500).send('Server Error');
+    res.status(500).render('error', { error: 'Server Error' });
   }
 };
 
 exports.addTransaction = async (req, res) => {
-
- 
   try {
     const { type, amount, category, description } = req.body;
     const transaction = new Transaction({
@@ -42,66 +39,64 @@ exports.addTransaction = async (req, res) => {
     await transaction.save();
     res.redirect('/');
   } catch (err) {
-    res.status(500).send('Server Error');
+    res.status(500).render('error', { error: 'Server Error' });
   }
 };
+
 // Keyword lists
 const incomeKeywords = [
-  'payment received',
-  'credited',
-  'deposit',
-  'received from',
-  'amount received',
-  'payment successful',
-  'paid to you',
-  'thank you for your payment',
-  'has been credited',
-  'received your payment',
-  'we have received',
-  'payment confirmation',
-  'payment date',
-  'payment from'
+  { keyword: 'payment received', weight: 2 },
+  { keyword: 'credited', weight: 1 },
+  { keyword: 'deposit', weight: 1 },
+  { keyword: 'received from', weight: 1.5 },
+  { keyword: 'amount received', weight: 2 },
+  { keyword: 'payment successful', weight: 2 },
+  { keyword: 'paid to you', weight: 1.5 },
+  { keyword: 'thank you for your payment', weight: 2 },
+  { keyword: 'has been credited', weight: 1.5 },
+  { keyword: 'received your payment', weight: 2 },
+  { keyword: 'we have received', weight: 1.5 },
+  { keyword: 'payment confirmation', weight: 2 },
+  { keyword: 'payment date', weight: 1 },
+  { keyword: 'payment from', weight: 1.5 },
 ];
-
 
 const expenseKeywords = [
-  'invoice',
-  'balance due',
-  'amount due',
-  'billed to',
-  'payment method',
-  'subtotal',
-  'total due',
-  'remit to',
-  'purchase',
-  'items purchased',
-  'item(s)',
-  'quantity',
-  'product',
-  'office supplies',
-  'shipping method',
-  'unit price',
-  'due on receipt',
-  'terms',
-  'bill to',
-  'sales tax',
-  'payment instructions'
+  { keyword: 'invoice', weight: 2 },
+  { keyword: 'balance due', weight: 1.5 },
+  { keyword: 'amount due', weight: 1.5 },
+  { keyword: 'billed to', weight: 1 },
+  { keyword: 'payment method', weight: 1 },
+  { keyword: 'subtotal', weight: 1.5 },
+  { keyword: 'total due', weight: 2 },
+  { keyword: 'remit to', weight: 1 },
+  { keyword: 'purchase', weight: 1.5 },
+  { keyword: 'items purchased', weight: 1.5 },
+  { keyword: 'item(s)', weight: 1 },
+  { keyword: 'quantity', weight: 1 },
+  { keyword: 'product', weight: 1 },
+  { keyword: 'office supplies', weight: 1.5 },
+  { keyword: 'shipping method', weight: 1 },
+  { keyword: 'unit price', weight: 1 },
+  { keyword: 'due on receipt', weight: 1.5 },
+  { keyword: 'terms', weight: 1 },
+  { keyword: 'bill to', weight: 1 },
+  { keyword: 'sales tax', weight: 1.5 },
+  { keyword: 'payment instructions', weight: 1 },
 ];
-
 
 // Detect transaction type based on text
 function detectTransactionType(text) {
-   const textLower = text.toLowerCase();
-
+  const textLower = text.toLowerCase();
   let incomeScore = 0;
   let expenseScore = 0;
 
-  incomeKeywords.forEach(keyword => {
-    if (textLower.includes(keyword)) incomeScore++;
+  incomeKeywords.forEach(({ keyword, weight }) => {
+    if (textLower.includes(keyword)) incomeScore += weight;
   });
 
-  expenseKeywords.forEach(keyword => {
-    if (textLower.includes(keyword)) expenseScore++;
+  expenseKeywords.forEach(({ keyword, weight }) => {
+    if (textLower.includes(keyword)) expenseScore += weight;
   });
 
   console.log('Income score:', incomeScore);
@@ -109,11 +104,8 @@ function detectTransactionType(text) {
 
   if (incomeScore > expenseScore) return 'income';
   if (expenseScore > incomeScore) return 'expense';
-
-  // Tie or no match – fallback to user selection or 'unknown'
   return 'unknown';
 }
-
 
 // Preprocess the image
 async function preprocessImage(imagePath) {
@@ -137,8 +129,6 @@ async function preprocessImage(imagePath) {
   }
 }
 
-
-
 // OCR using Tesseract.js
 async function extractTextWithWorker(imagePath) {
   const worker = await createWorker();
@@ -158,8 +148,6 @@ async function extractTextWithWorker(imagePath) {
     await worker.terminate();
   }
 }
-
-
 
 // OCR fallback
 async function extractText(imagePath) {
@@ -182,8 +170,6 @@ async function extractText(imagePath) {
   }
 }
 
-
-
 // Extract amount from text
 function parseAmount(text) {
   if (!text) return 0;
@@ -193,7 +179,7 @@ function parseAmount(text) {
     /[\$€£]\s*(\d+\.\d{2})/i,
     /(\d+\.\d{2})(?=\s*[\$€£])/i,
     /\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/,
-    /(\d+\.\d{2})/
+    /(\d+\.\d{2})/,
   ];
 
   for (const pattern of patterns) {
@@ -206,6 +192,15 @@ function parseAmount(text) {
   return 0;
 }
 
+// Utility for file cleanup
+async function cleanupFile(filePath) {
+  if (!filePath) return;
+  try {
+    await fs.unlink(filePath);
+  } catch (err) {
+    console.error('Cleanup error:', err);
+  }
+}
 
 // Main upload controller
 exports.uploadReceipt = async (req, res) => {
@@ -247,7 +242,7 @@ exports.uploadReceipt = async (req, res) => {
       amount,
       category: 'Receipt',
       description: ocrText.substring(0, 500),
-      receiptPath: originalPath
+      receiptPath: originalPath,
     });
 
     await transaction.save();
@@ -256,51 +251,51 @@ exports.uploadReceipt = async (req, res) => {
       success: true,
       amount,
       type,
-      textPreview: ocrText.substring(0, 200)
+      textPreview: ocrText.substring(0, 200),
     });
-
   } catch (err) {
     console.error('Processing failed:', err);
     return res.status(500).json({
       error: err.message || 'Receipt processing failed',
-      success: false
+      success: false,
     });
   } finally {
-    try {
-      if (processedImagePath && processedImagePath !== originalPath) {
-        fs.unlinkSync(processedImagePath);
-      }
-      fs.unlinkSync(originalPath);
-    } catch (cleanupErr) {
-      console.error('Cleanup error:', cleanupErr);
+    if (processedImagePath && processedImagePath !== originalPath) {
+      await cleanupFile(processedImagePath);
     }
+    await cleanupFile(originalPath);
   }
 };
 
-
-
-
 exports.voiceInput = async (req, res) => {
   try {
-    // Assuming the audio file is sent in the request body as base64
-    const audioBuffer = Buffer.from(req.body.audio, 'base64');
-    const audioPath = path.join(__dirname, '..', 'uploads', `${Date.now()}.wav`);
-    fs.writeFileSync(audioPath, audioBuffer);
+    console.log('Voice input received, req.file:', req.file);
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file uploaded' });
+    }
 
-    // Use a speech-to-text service here (e.g., Google Cloud, AssemblyAI)
-    // For demonstration, we'll assume the transcription is returned as 'transcribedText'
-    const transcribedText = 'Sample transcription text';
+    const audioPath = req.file.path;
+
+    // Placeholder for speech-to-text (replace with actual service)
+    const transcribedText = 'Sample transcription text'; // Use AssemblyAI or similar
+
+    const amount = parseAmount(transcribedText);
+    const type = detectTransactionType(transcribedText);
 
     const transaction = new Transaction({
-      type: 'expense',
-      amount: 0, // Extract amount from transcribedText if possible
+      type: type || 'expense',
+      amount: amount || 0,
       category: 'Voice Input',
-      description: transcribedText,
+      description: transcribedText.substring(0, 500),
     });
+
     await transaction.save();
-    fs.unlinkSync(audioPath);
+    await cleanupFile(audioPath);
+
     res.redirect('/');
   } catch (err) {
-    res.status(500).send('Server Error');
+    console.error('Voice input error:', err);
+    await cleanupFile(req.file?.path);
+    res.status(500).render('error', { error: 'Failed to process audio. Please try again.' });
   }
 };
