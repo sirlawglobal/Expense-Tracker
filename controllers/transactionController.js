@@ -1,8 +1,10 @@
 const Transaction = require('../models/Transaction');
-// const tesseract = require('node-tesseract-ocr');
 const tesseract = require('tesseract.js');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
+const { createWorker } = require('tesseract.js');
+
 
 exports.getDashboard = async (req, res) => {
   try {
@@ -43,14 +45,77 @@ exports.addTransaction = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+// Keyword lists
+const incomeKeywords = [
+  'payment received',
+  'credited',
+  'deposit',
+  'received from',
+  'amount received',
+  'payment successful',
+  'paid to you',
+  'thank you for your payment',
+  'has been credited',
+  'received your payment',
+  'we have received',
+  'payment confirmation',
+  'payment date',
+  'payment from'
+];
 
 
-const sharp = require('sharp');
-// const fs = require('fs');
-// const path = require('path');
+const expenseKeywords = [
+  'invoice',
+  'balance due',
+  'amount due',
+  'billed to',
+  'payment method',
+  'subtotal',
+  'total due',
+  'remit to',
+  'purchase',
+  'items purchased',
+  'item(s)',
+  'quantity',
+  'product',
+  'office supplies',
+  'shipping method',
+  'unit price',
+  'due on receipt',
+  'terms',
+  'bill to',
+  'sales tax',
+  'payment instructions'
+];
 
-const { createWorker } = require('tesseract.js');
 
+// Detect transaction type based on text
+function detectTransactionType(text) {
+   const textLower = text.toLowerCase();
+
+  let incomeScore = 0;
+  let expenseScore = 0;
+
+  incomeKeywords.forEach(keyword => {
+    if (textLower.includes(keyword)) incomeScore++;
+  });
+
+  expenseKeywords.forEach(keyword => {
+    if (textLower.includes(keyword)) expenseScore++;
+  });
+
+  console.log('Income score:', incomeScore);
+  console.log('Expense score:', expenseScore);
+
+  if (incomeScore > expenseScore) return 'income';
+  if (expenseScore > incomeScore) return 'expense';
+
+  // Tie or no match – fallback to user selection or 'unknown'
+  return 'unknown';
+}
+
+
+// Preprocess the image
 async function preprocessImage(imagePath) {
   const tempPath = path.join(
     path.dirname(imagePath),
@@ -63,26 +128,22 @@ async function preprocessImage(imagePath) {
       .normalise()
       .linear(1.2, -(128 * 0.2))
       .sharpen()
-      .threshold(128, { 
-        threshold: 128,
-        greyscale: false
-      })
+      .threshold(128, { threshold: 128, greyscale: false })
       .toFile(tempPath);
     return tempPath;
   } catch (err) {
     console.error('Image processing failed, using original:', err);
-    return imagePath; // Fallback to original
+    return imagePath;
   }
 }
 
+
+
+// OCR using Tesseract.js
 async function extractTextWithWorker(imagePath) {
-  const worker = await createWorker({
-    logger: m => console.log(m),
-  });
+  const worker = await createWorker();
 
   try {
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
     await worker.setParameters({
       tessedit_pageseg_mode: '6',
       tessedit_char_whitelist: '0123456789.,$€£ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz: ',
@@ -90,37 +151,43 @@ async function extractTextWithWorker(imagePath) {
 
     const { data } = await worker.recognize(imagePath);
     return data.text;
+  } catch (err) {
+    console.error('Worker recognition error:', err);
+    throw err;
   } finally {
     await worker.terminate();
   }
 }
 
+
+
+// OCR fallback
 async function extractText(imagePath) {
   try {
-    // First try with worker for better reliability
-    try {
-      const text = await extractTextWithWorker(imagePath);
-      if (text && text.trim().length > 5) return text;
-    } catch (workerErr) {
-      console.log('Worker approach failed, trying direct:', workerErr);
-    }
+    const text = await extractTextWithWorker(imagePath);
+    if (text && text.trim().length > 5) return text;
 
-    // Fallback to direct recognition
-    const { data } = await tesseract.recognize(imagePath, 'eng', {
-      preserve_interword_spaces: 1,
-      tessedit_pageseg_mode: '6',
-    });
-    return data.text;
-  } catch (err) {
-    console.error('OCR extraction failed:', err);
-    throw new Error('Text extraction failed');
+    throw new Error('Insufficient text extracted');
+  } catch (workerErr) {
+    console.log('Worker approach failed:', workerErr.message);
+
+    try {
+      const { recognize } = require('tesseract.js');
+      const { data: { text } } = await recognize(imagePath);
+      return text;
+    } catch (simpleErr) {
+      console.error('Simple recognition failed:', simpleErr);
+      throw new Error('All OCR attempts failed');
+    }
   }
 }
 
+
+
+// Extract amount from text
 function parseAmount(text) {
   if (!text) return 0;
 
-  // Try multiple patterns in order of likelihood
   const patterns = [
     /(?:total|amount|balance|due|payment)[\s:]*[\$€£]?[\s]*([\d,]+\.\d{2})/i,
     /[\$€£]\s*(\d+\.\d{2})/i,
@@ -139,27 +206,25 @@ function parseAmount(text) {
   return 0;
 }
 
+
+// Main upload controller
 exports.uploadReceipt = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
   const originalPath = req.file.path;
-  let tempPath = null;
   let processedImagePath = null;
 
   try {
-    // 1. Preprocess image
     processedImagePath = await preprocessImage(originalPath);
     console.log('Using image:', processedImagePath);
 
-    // 2. Extract text with multiple fallbacks
     let ocrText = '';
     try {
       ocrText = await extractText(processedImagePath);
     } catch (err) {
       console.log('Primary OCR failed, trying fallback...');
-      // Fallback to original image if processed version fails
       if (processedImagePath !== originalPath) {
         ocrText = await extractText(originalPath);
       }
@@ -171,13 +236,14 @@ exports.uploadReceipt = async (req, res) => {
 
     console.log('Extracted text:', ocrText);
 
-    // 3. Parse amount
     const amount = parseAmount(ocrText);
     console.log('Parsed amount:', amount);
 
-    // 4. Save transaction
+    const type = detectTransactionType(ocrText);
+    console.log('Detected type:', type);
+
     const transaction = new Transaction({
-      type: 'expense',
+      type,
       amount,
       category: 'Receipt',
       description: ocrText.substring(0, 500),
@@ -189,17 +255,17 @@ exports.uploadReceipt = async (req, res) => {
     return res.json({
       success: true,
       amount,
+      type,
       textPreview: ocrText.substring(0, 200)
     });
 
   } catch (err) {
     console.error('Processing failed:', err);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: err.message || 'Receipt processing failed',
       success: false
     });
   } finally {
-    // Cleanup files
     try {
       if (processedImagePath && processedImagePath !== originalPath) {
         fs.unlinkSync(processedImagePath);
@@ -210,6 +276,8 @@ exports.uploadReceipt = async (req, res) => {
     }
   }
 };
+
+
 
 
 exports.voiceInput = async (req, res) => {
