@@ -1,51 +1,108 @@
-
 <div class="container">
-  <h1>Expense Tracker</h1>
-
-  <div class="totals">
-    <div class="card income">Income: ₦<%= income %></div>
-    <div class="card expense">Expenses: ₦<%= expenses %></div>
-    <div class="card profit">Profit: ₦<%= profit %></div>
+  <div class="header-row" aria-label="Dashboard Header and Actions">
+    <header class="dashboard-header">
+      <h1>Expense Tracker</h1>
+      <p class="subtitle">Manage your finances with ease</p>
+    </header>
+    <div class="button-group">
+      <button id="viewChart" class="submit-btn">View Chart</button>
+      <button id="viewTransactions" class="submit-btn">View Transactions</button>
+    </div>
   </div>
 
-  <div class="forms">
-    <form action="/add" method="POST" class="form-card">
+  <!-- Summary Cards -->
+  <section class="totals" aria-label="Financial Summary">
+    <div class="card income" role="region" aria-label="Total Income">
+      <span class="card-label">Income</span>
+      <span class="card-value">₦<%= income.toLocaleString() %></span>
+    </div>
+    <div class="card expense" role="region" aria-label="Total Expenses">
+      <span class="card-label">Expenses</span>
+      <span class="card-value">₦<%= expenses.toLocaleString() %></span>
+    </div>
+    <div class="card profit" role="region" aria-label="Total Profit">
+      <span class="card-label">Profit</span>
+      <span class="card-value">₦<%= profit.toLocaleString() %></span>
+    </div>
+  </section>
+
+  <!-- Forms Section -->
+  <section class="forms" aria-label="Transaction and Upload Forms">
+    <form action="/add" method="POST" class="form-card" aria-label="Add Transaction Form">
       <h3>Add Transaction</h3>
-      <select name="type" required>
-        <option value="" disabled selected>Select Type</option>
-        <option value="income">Income</option>
-        <option value="expense">Expense</option>
-      </select>
-      <input type="number" name="amount" placeholder="Amount" required />
-      <input type="text" name="category" placeholder="Category" />
-      <input type="text" name="description" placeholder="Description" />
-      <button type="submit">Add</button>
+      <div class="form-group">
+        <label for="type">Transaction Type</label>
+        <select name="type" id="type" required>
+          <option value="" disabled selected>Select Type</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="amount">Amount (₦)</label>
+        <input type="number" name="amount" id="amount" placeholder="Enter amount" min="0" step="0.01" required />
+      </div>
+      <div class="form-group">
+        <label for="category">Category</label>
+        <input type="text" name="category" id="category" placeholder="e.g., Salary, Food" />
+      </div>
+      <div class="form-group">
+        <label for="description">Description</label>
+        <input type="text" name="description" id="description" placeholder="Optional note" />
+      </div>
+      <button type="submit" class="submit-btn">Add Transaction</button>
     </form>
 
-    <form action="/upload" method="POST" enctype="multipart/form-data" class="form-card">
+    <form action="/upload" method="POST" enctype="multipart/form-data" class="form-card" aria-label="Upload Receipt Form">
       <h3>Upload Receipt</h3>
-      <input type="file" name="receipt" accept="image/*" required />
-      <button type="submit">Upload</button>
+      <div class="form-group">
+        <label for="receipt">Choose Receipt Image</label>
+        <input type="file" name="receipt" id="receipt" accept="image/*" required />
+      </div>
+      <button type="submit" class="submit-btn">Upload Receipt</button>
     </form>
 
-   <form id="voiceForm" action="/voice" method="POST" enctype="multipart/form-data" class="form-card">
-  <h3>Voice Input</h3>
-  <button type="button" id="recordBtn" class="record-btn">🎙️ Start Recording</button>
-  <audio id="audioPreview" controls style="display:none; margin-top: 10px; width: 100%; border-radius: 5px;"></audio>
-  <input type="file" name="audio" id="audioInput" accept="audio/*" style="display:none;" />
-  <button type="submit" disabled id="submitVoice" class="submit-voice-btn">Submit</button>
-</form>
+    <form id="voiceForm" action="/voice" method="POST" enctype="multipart/form-data" class="form-card" aria-label="Voice Input Form">
+      <h3>Voice Input</h3>
+      <div class="form-group">
+        <button type="button" id="recordBtn" class="record-btn" aria-label="Start or Stop Recording">
+          <span class="record-icon">🎙️</span> <span id="recordText">Start Recording</span>
+        </button>
+        <audio id="audioPreview" controls aria-label="Audio preview"></audio>
+        <input type="file" name="audio" id="audioInput" accept="audio/*" hidden />
+      </div>
+      <button type="submit" id="submitVoice" class="submit-voice-btn" disabled>Submit Audio</button>
+    </form>
+  </section>
+
+  <!-- Chart Modal -->
+  <div id="chartModal" class="modal" role="dialog" aria-labelledby="chartModalTitle" aria-hidden="true">
+    <div class="modal-content">
+      <h3 id="chartModalTitle" class="modal-title">Income vs Expenses</h3>
+      <button id="closeChartModal" class="modal-close" aria-label="Close chart modal">✕</button>
+      <canvas id="financeChart" aria-label="Bar chart showing income and expenses" data-income="<%= income || 0 %>" data-expenses="<%= expenses || 0 %>"></canvas>
+    </div>
   </div>
 
-  <h3 class="transactions-title">Transactions</h3>
-  <ul class="transactions">
-    <% transactions.forEach(transaction => { %>
-      <li class="<%= transaction.type %>">
-        <%= transaction.date.toDateString() %> – 
-        ₦<%= transaction.amount %> – 
-        <%= transaction.category %> – 
-        <%= transaction.description %>
-      </li>
-    <% }) %>
-  </ul>
+  <!-- Transactions Modal -->
+  <div id="transactionsModal" class="modal" role="dialog" aria-labelledby="modalTitle" aria-hidden="true">
+    <div class="modal-content">
+      <h3 id="modalTitle" class="transactions-title">Recent Transactions</h3>
+      <button id="closeModal" class="modal-close" aria-label="Close modal">✕</button>
+      <ul class="transactions">
+        <% if (transactions.length === 0) { %>
+          <li class="empty-state">No transactions yet. Add one above!</li>
+        <% } else { %>
+          <% transactions.forEach(transaction => { %>
+            <li class="<%= transaction.type %>" role="listitem">
+              <span class="transaction-date"><%= transaction.date.toLocaleDateString() %></span>
+              <span class="transaction-amount">₦<%= transaction.amount.toLocaleString() %></span>
+              <span class="transaction-category"><%= transaction.category || 'N/A' %></span>
+              <span class="transaction-description"><%= transaction.description || 'No description' %></span>
+            </li>
+          <% }) %>
+        <% } %>
+      </ul>
+    </div>
+  </div>
 </div>
